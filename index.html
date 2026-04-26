@@ -1,1 +1,444 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title> 🎵 Hit-Quiz 🎵 </title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
 
+        body { 
+            font-family: 'Segoe UI', Roboto, sans-serif; 
+            text-align: center; 
+            background-color: #0d0221; 
+            color: #e0e0e0; 
+            margin: 0; padding: 0;
+            background-image: linear-gradient(180deg, #0d0221 0%, #0f0c29 100%); 
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animationen */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes pulse-gold { 
+            from { transform: scale(1); box-shadow: 0 0 10px rgba(255, 215, 0, 0.3); } 
+            to { transform: scale(1.02); box-shadow: 0 0 20px rgba(255, 215, 0, 0.7); } 
+        }
+
+        .animate-fade { animation: fadeIn 0.6s ease-out; }
+        .animate-slide { animation: slideInUp 0.4s ease-out; }
+        .winner-glow { border: 2px solid #ffd700 !important; animation: pulse-gold 1.5s infinite alternate !important; }
+        .winner-text { color: #ffd700 !important; text-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }
+
+        /* iOS Video-Loch & Tuch */
+        #video-wrapper {
+            width: 120px; height: 120px; margin: 15px auto;
+            border-radius: 50%; border: 4px solid #00d4ff;
+            overflow: hidden; position: relative; background: #000;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+            cursor: pointer;
+        }
+
+        #video-player {
+            position: absolute; top: 55%; left: 50%;
+            transform: translate(-50%, -50%) scale(1.5); 
+            width: 100%; height: 100%;
+        }
+
+        #video-cover {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0d0221;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 20;
+        }
+
+        #video-cover::after {
+            content: '🎵';
+            font-size: 50px;
+        }
+
+        /* Restliches Styling */
+        #sticky-header {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(13, 2, 33, 0.95); backdrop-filter: blur(10px);
+            border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+        }
+
+        .scoreboard { display: flex; overflow-x: auto; justify-content: center; gap: 10px; padding: 8px; }
+        .player-score { 
+            background: rgba(20, 20, 35, 0.9); padding: 10px; 
+            border-radius: 15px; min-width: 140px; 
+            border: 1px solid #444; transition: all 0.3s;
+        }
+
+        .score-val { font-size: 1.8em; color: #bcff00; font-family: monospace; display: block; margin: 2px 0; }
+        .timeline { 
+            display: flex; flex-direction: column; gap: 4px; margin-top: 8px; 
+            max-height: 80px; overflow-y: auto; font-size: 0.65em;
+            border-top: 1px solid rgba(255,255,255,0.1); padding-top: 5px;
+        }
+        
+        .timeline-card { 
+            background: #161625; padding: 4px; border-radius: 4px; 
+            border-left: 3px solid #ff0055; text-align: left; color: #00d4ff;
+        }
+
+        .card { 
+            background: rgba(25, 25, 40, 0.8); border-radius: 20px; 
+            padding: 20px; margin: 10px auto; max-width: 90%; 
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); 
+        }
+
+        button { 
+            background: #ff0055; border: none; color: white; padding: 12px 20px; 
+            border-radius: 50px; cursor: pointer; font-weight: bold; margin: 5px; 
+            transition: 0.2s; box-shadow: 0 4px 10px rgba(255, 0, 85, 0.3);
+        }
+
+        .btn-plus { background: #1DB954 !important; }
+        .btn-minus { background: #444 !important; font-size: 0.8em; }
+        .btn-secondary { background: #00d4ff; color: #000; }
+        .btn-danger { background: #cc0000; opacity: 0.7; font-size: 0.8em; }
+
+        .hidden { display: none !important; }
+        select, input { background: #1a1a2e; border: 1px solid #333; color: #00d4ff; padding: 10px; border-radius: 12px; width: 80%; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="setup-area" class="card animate-fade">
+        <h2 style="color: #00d4ff;">🎮 Retro Quiz Setup</h2>
+        <button onclick="toggleTutorial()" style="background: transparent; border: 1px solid #00d4ff; color: #00d4ff; font-size: 0.7em;">❓ Anleitung</button>
+        <p>1. Kategorie & Paket:</p>
+        <select id="category-dropdown" onchange="updateBoxDropdown()"></select>
+        <select id="box-dropdown"></select>
+        <hr style="opacity: 0.1; margin: 15px 0;">
+        <p>2. Spieleranzahl:</p>
+        <button onclick="createPlayerInputs(2)">2</button>
+        <button onclick="createPlayerInputs(3)">3</button>
+        <button onclick="createPlayerInputs(4)">4</button>
+        <div id="name-inputs"></div>
+        <button id="start-game-btn" class="hidden" onclick="startGame()" style="background: white; color: black; width: 80%;">Spiel starten 🚀</button>
+    </div>
+
+    <div id="game-area" class="hidden">
+        <div id="sticky-header">
+            <div id="scoreboard" class="scoreboard"></div>
+        </div>
+
+        <div class="card animate-slide">
+            <h2 id="status">Bereit?</h2>
+            
+            <button id="undo-btn" onclick="undoLastSong()" class="hidden" style="font-size: 0.75em; background: #555; margin-bottom: 10px; width: 60%; border-radius: 10px;">↩️ Ups, einen Song zurück</button>
+            
+            <div id="video-wrapper" onclick="handleCoverClick()">
+                <div id="video-cover"></div>
+                <iframe id="video-player" src="" frameborder="0" allow="autoplay; encrypted-media; playsinline"></iframe>
+            </div>
+
+            <button onclick="pickRandomSong()" style="width: 80%; font-size: 1.1em; background: #1DB954;">🎲 NÄCHSTER SONG</button>
+            
+            <div id="controls" class="hidden animate-fade">
+                <button onclick="stopVideo()" style="background: #cc0000;">⏹️ STOP</button>
+                <button onclick="revealInfo()" class="btn-secondary">👁️ LÖSUNG ZEIGEN</button>
+            </div>
+
+            <div id="song-info" class="hidden animate-slide">
+                <h3 id="display-title" style="color: #bcff00; margin-bottom: 5px;"></h3>
+                <p id="display-year" style="font-family: monospace; font-weight: bold;"></p>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px; padding-bottom: 30px;">
+            <p id="db-count" style="font-size: 0.7em; color: #666;"></p>
+            <button onclick="backToMenu()" class="btn-secondary" style="font-size: 0.8em;">📂 Box wechseln</button>
+            <button onclick="resetScores()" class="btn-danger" style="background: #ffa500; color: black;">🔄 Punkte Reset</button>
+            <button onclick="hardReset()" class="btn-danger">💀 Alles löschen</button>
+        </div>
+    </div>
+
+    <div id="tutorial-modal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; display: none; align-items: center; justify-content: center;">
+        <div class="card animate-slide" style="max-width: 85%; max-height: 80%; overflow-y: auto; border-color: #bcff00; border-width: 2px;">
+            <h2 style="color: #bcff00; margin-top: 0;">📖 Kurzanleitung</h2>
+            <ul style="text-align: left; list-style: none; padding: 0; line-height: 1.7;">
+                <li style="margin-bottom: 12px;">1️⃣ Wähle eine <b>Box</b> und die <b>Spieleranzahl</b> aus.</li>
+    
+                <li style="margin-bottom: 12px;">2️⃣ <b>Start-Karte:</b> Deckt für jeden vorab einen Song auf (Lösung direkt zeigen) und weist ihn mit <b>+1</b> zu.</li>
+    
+                <li style="margin-bottom: 12px;">3️⃣ Klicke auf <b>Nächster Song</b> – das Lied wird geladen.</li>
+    
+                <li style="margin-bottom: 12px;">4️⃣ Drücke kurz auf <b>Play</b> - das Lied wird abgespielt.</li>
+    
+                <li style="margin-bottom: 12px;">5️⃣ Wer das Jahr richtig einordnet, bekommt <b>+1 Punkt</b>.</li>
+    
+                <li style="margin-bottom: 12px;">6️⃣ Der Song erscheint automatisch in deiner <b>Timeline</b>.</li>
+    
+                <li style="margin-bottom: 12px;">7️⃣ Mit <b>Lösung zeigen</b> beendest du die aktuelle Runde.</li>
+
+                <li style="margin-bottom: 12px;">8️⃣ <b>Ziel:</b> Wer zuerst <b>10 Punkte</b> gesammelt hat, gewinnt das Spiel! 🏆</li>
+    
+                <li style="margin-top: 15px; color: #ffd700; border-top: 1px solid #333; padding-top: 10px; font-size: 0.85em;">
+                    💡 <b>Tipp:</b> Nutze Adblocker oder YT Premium, um Werbung zu vermeiden.
+                </li>
+            <button onclick="toggleTutorial()" class="btn-secondary" style="width: 100%; margin-top: 10px;">Alles klar!</button>
+        </div>
+    </div>
+
+<script>
+    const quizDaten = {
+        "Vinyl-Singles": {
+            "Vinyl-Box 1": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQjElFG26lRR_AjCpZIyBsmXT7TlOKmoIY99hPKrogCwvnVHGlThxIAe-K8ILOznkhUd_NUabzIe8qu/pub?output=csv",
+            "Vinyl-Box 2": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQaZ55kvandOLvE3JBbaxbh4ZnUsCi4z7lK0K7tC7fx5oUaIxEeTvyfKYagAB7YlA4mSvoZREneXu7N/pub?output=csv",
+            "Vinyl-Box 3": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWX-VXG6A0DFUdb3E0H7pjoSBd1vgfgo_5llOFqTeva94utZp2xBvXHq4fcpdAcSZbd0eNyyBWpXk2/pub?output=csv",
+            "Vinyl-Box 4": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5RUFy3AdZ3-g-iq64XeddZZxFjNmbsBG76ocLh1h09BdzHEvAJIsFIrEa5ZdygvHiZEbfp-Q5Q9SM/pub?output=csv"
+        },
+        "Best Of": { 
+            "Best Of-Box 1": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHd-qS-Q6FSE6vrcAsQpAc6vVT8AdkZ8OK6oMc2IoBhA_mmHm-wW8e_OnIB2cQy0m-o7oVxWQuBlbR/pub?output=csv", 
+            "Best Of-Box 2": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSVmcUtONEcIOdXien4FozsQJ5zxyzphm2J6_jguaUFyRLqI3m7WYyj6hAewzbhSxPvjRbzjwPmkGev/pub?output=csv",
+            "Best Of-Box 3": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRBty0OccPS1PxuHf6L4dDQEbIULHrKe9HtNBJTXshR2R5Kvu1hgVWXvNiPajCFwLR8lkJfENAq-3xH/pub?output=csv"
+        }
+    };
+
+    let songDatenbank = [];
+    let players = JSON.parse(localStorage.getItem('hitster_players')) || [];
+    let currentSong = null;
+    let playedSongIds = JSON.parse(localStorage.getItem('hitster_played_songs')) || [];
+    let lastSong = null;
+
+    window.onload = async function() {
+        // 1. Kategorien laden
+        const catDrop = document.getElementById('category-dropdown');
+        for (let kat in quizDaten) {
+            let opt = document.createElement('option');
+            opt.value = kat; opt.textContent = kat; catDrop.appendChild(opt);
+        }
+        updateBoxDropdown();
+
+        // 2. Prüfen, ob eine Runde läuft (Auto-Fortsetzen)
+        if (players && players.length > 0) {
+            // Wir rufen startGame auf, aber die Funktion muss wissen, 
+            // dass sie die Spieler nicht überschreiben darf.
+            await startGame(); 
+        } else {
+            // Nur wenn keine Runde läuft, zeige das Tutorial
+            toggleTutorial(); 
+        }
+    };
+
+    function updateBoxDropdown() {
+        const kat = document.getElementById('category-dropdown').value;
+        const boxDrop = document.getElementById('box-dropdown');
+        boxDrop.innerHTML = "";
+        for (let box in quizDaten[kat]) {
+            let opt = document.createElement('option');
+            opt.value = quizDaten[kat][box]; opt.textContent = box; boxDrop.appendChild(opt);
+        }
+    }
+
+    function createPlayerInputs(num) {
+        const div = document.getElementById('name-inputs');
+        div.innerHTML = "<h3>Spielernamen:</h3>";
+        for(let i=1; i<=num; i++) {
+            div.innerHTML += `<input type="text" id="name-${i}" placeholder="Spieler ${i}">`;
+        }
+        document.getElementById('start-game-btn').classList.remove('hidden');
+    }
+
+    async function startGame() {
+        const url = document.getElementById('box-dropdown').value;
+        try {
+            const response = await fetch(url);
+            const data = await response.text();
+            const rows = data.split(/\r?\n/).slice(1);
+            songDatenbank = rows.map(row => {
+                const col = row.split(row.includes(';') ? ';' : ',');
+                return { ytId: col[0]?.trim(), titel: col[1]?.trim(), interpret: col[2]?.trim(), jahr: col[3]?.trim() };
+            }).filter(s => s.ytId && s.ytId.length > 5);
+
+            if (players.length === 0) {
+                const inputs = document.querySelectorAll('#name-inputs input');
+                players = Array.from(inputs).map(inp => ({ name: inp.value || "Spieler", score: 0, timeline: [], wins: 0 }));
+            }
+
+            saveGameState();
+            
+            document.getElementById('setup-area').classList.add('hidden');
+            document.getElementById('game-area').classList.remove('hidden');
+            updateDbCounter();
+            renderScoreboard();
+        } catch(e) { alert("Fehler beim Laden der Songs!"); }
+    }
+
+    function renderScoreboard() {
+        const sb = document.getElementById('scoreboard');
+        sb.innerHTML = players.map((p, i) => {
+            const isWinner = p.score >= 10;
+            const sorted = [...p.timeline].sort((a, b) => parseInt(a.jahr) - parseInt(b.jahr));
+            const timelineHTML = sorted.map(s => `<div class="timeline-card"><b>${s.jahr}</b> ${s.titel}</div>`).join("");
+            return `
+                <div class="player-score ${isWinner ? 'winner-glow' : ''}">
+                    <small>🏆 ${p.wins || 0}</small><br>
+                    <strong class="${isWinner ? 'winner-text' : ''}">${p.name}</strong>
+                    <span class="score-val">${p.score}</span>
+                    <button onclick="addPoint(${i})" class="btn-plus">+1</button>
+                    <button onclick="removePoint(${i})" class="btn-minus">-1</button>
+                    <div class="timeline">${timelineHTML}</div>
+                </div>`;
+        }).join("");
+    }
+
+    function addPoint(idx) {
+        if (!currentSong) return;
+        players[idx].timeline.push({ titel: currentSong.titel, jahr: currentSong.jahr });
+        players[idx].score = players[idx].timeline.length;
+
+        saveGameState();
+        
+        if (players[idx].score >= 10) {
+            players[idx].wins = (players[idx].wins || 0) + 1;
+            confetti({ particleCount: 200, spread: 80, origin: { y: 0.6 } });
+        }
+        renderScoreboard();
+    }
+
+    function removePoint(idx) {
+        if (players[idx].timeline.length > 0) {
+            players[idx].timeline.pop();
+            players[idx].score = players[idx].timeline.length;
+
+            saveGameState();
+        
+        }
+        renderScoreboard();
+    }
+
+    function pickRandomSong() {
+        // 1. POOL FILTERN
+        // Es werden nur Songs gewählt, die in dieser Sitzung noch nicht dran waren.
+        let pool = songDatenbank.filter(s => !playedSongIds.includes(s.ytId));
+        if (pool.length === 0) return alert("Box leer!");
+
+        // 2. SONG-HISTORY (UNDO-FUNKTION)
+        // Bevor der neue Song kommt, merken wir uns den aktuellen als "lastSong".
+        if (currentSong) {
+            lastSong = currentSong;
+            document.getElementById('undo-btn').classList.remove('hidden');
+        }
+
+        // 3. ZUFALLSWAHL
+        // Ein neuer Song wird aus dem Pool gezogen.
+        currentSong = pool[Math.floor(Math.random() * pool.length)];
+
+        // 4. UI RESET (DAS TUCH)
+        // Ganz wichtig: Hier stellen wir sicher, dass das Tuch blickdicht oben liegt,
+        // bevor das Video geladen wird. So wird kein Vorschaubild ("Schummeln") gesehen.
+        const cover = document.getElementById('video-cover');
+        cover.style.display = "flex";
+        cover.style.opacity = "1";
+        document.getElementById('status').innerText = "Bereit? Tippe auf die Note!";
+
+        // 5. PLAYER LADEN (iOS OPTIMIERT)
+        // Die URL wird in das Iframe geladen. 
+        // "enablejsapi=1" erlaubt uns, den Ton später per Klick zu starten.
+        // "autoplay=1" versucht zu starten, "playsinline=1" verhindert den Vollbildmodus.
+        document.getElementById('video-player').src = 
+            `https://www.youtube.com/embed/${currentSong.ytId}?autoplay=1&playsinline=1&modestbranding=1&rel=0&enablejsapi=1`;
+
+        // Controls einblenden, Song-Info (Lösung) verstecken
+        document.getElementById('controls').classList.remove('hidden');
+        document.getElementById('song-info').classList.add('hidden');
+    }
+
+    function handleCoverClick() {
+        // Das Tuch bleibt SICHTBAR (wir löschen die Zeilen, die es verstecken)
+    
+        document.getElementById('status').innerText = "Musik läuft...";
+
+        // Der wichtigste Teil für iOS: Der Klick triggert den Sound
+        const player = document.getElementById('video-player');
+        player.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+
+        // Optisches Feedback: Die Note kurz vergrößern, damit man merkt, dass gedrückt wurde
+        const cover = document.getElementById('video-cover');
+        cover.style.transform = "scale(1.1)";
+        setTimeout(() => { cover.style.transform = "scale(1)"; }, 200);
+    }
+
+    function stopVideo() { document.getElementById('video-player').src = ""; }
+
+    function revealInfo() {
+        stopVideo();
+        document.getElementById('video-cover').style.display = "none";
+        document.getElementById('song-info').classList.remove('hidden');
+        document.getElementById('display-title').innerText = currentSong.titel + " - " + currentSong.interpret;
+        document.getElementById('display-year').innerText = "Jahr: " + currentSong.jahr;
+        
+        if (!playedSongIds.includes(currentSong.ytId)) {
+            playedSongIds.push(currentSong.ytId);
+            localStorage.setItem('hitster_played_songs', JSON.stringify(playedSongIds));
+            updateDbCounter();
+        }
+    }
+
+    function undoLastSong() {
+        if (lastSong) {
+            currentSong = lastSong;
+            lastSong = null;
+            playedSongIds = playedSongIds.filter(id => id !== currentSong.ytId);
+            localStorage.setItem('hitster_played_songs', JSON.stringify(playedSongIds));
+            
+            const cover = document.getElementById('video-cover');
+            cover.style.display = "flex";
+            cover.style.opacity = "1";
+            document.getElementById('video-player').src = `https://www.youtube.com/embed/${currentSong.ytId}?autoplay=1&playsinline=1&modestbranding=1&rel=0&enablejsapi=1`;
+            
+            document.getElementById('undo-btn').classList.add('hidden');
+            updateDbCounter();
+        }
+    }
+
+    function updateDbCounter() {
+        const pool = songDatenbank.filter(s => !playedSongIds.includes(s.ytId));
+        document.getElementById('db-count').innerText = `Pool: ${pool.length} | Gespielt: ${playedSongIds.length}`;
+    }
+
+    function resetScores() {
+        if(confirm("Runde neustarten?")) {
+            players.forEach(p => { p.score = 0; p.timeline = []; });
+            saveGameState();
+            renderScoreboard();
+        }
+    }
+
+    function backToMenu() {
+        document.getElementById('game-area').classList.add('hidden');
+        document.getElementById('setup-area').classList.remove('hidden');
+        stopVideo();
+    }
+
+    function hardReset() {
+        if(confirm("ALLES LÖSCHEN?")) {
+            localStorage.clear();
+            location.reload();
+        }
+    }
+
+    function saveGameState() {
+        localStorage.setItem('hitster_players', JSON.stringify(players));
+    }
+
+    function toggleTutorial() {
+        const modal = document.getElementById('tutorial-modal');
+        if (modal.style.display === 'none' || modal.classList.contains('hidden')) {
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+        } else {
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+    }
+</script>
+</body>
+</html>
